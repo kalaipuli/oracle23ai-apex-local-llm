@@ -1,0 +1,1 @@
+CONN_STRING=sys/OraclePwd123@oracle-db:1521/FREEPDB1

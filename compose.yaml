@@ -1,0 +1,71 @@
+services:
+  oracle-db:
+    image: container-registry.oracle.com/database/free:latest
+    container_name: oracle-db
+    environment:
+      - ORACLE_PWD=OraclePwd123  # Set strong password
+      - ORACLE_PDB=ORCLPDB1
+    ports:
+      - "1521:1521"  # Oracle listener
+      - "5500:5500"  # EM Express (if enabled)
+    volumes:
+      - ./oradata:/opt/oracle/oradata
+    networks:
+      - apexnet
+    healthcheck:
+      test: [ "CMD", "/opt/oracle/checkDBStatus.sh"]
+      interval: 10s
+      timeout: 10s
+      retries: 200
+
+  ords-apex:
+    image: container-registry.oracle.com/database/ords-developer:latest
+    container_name: ords-apex
+    depends_on:
+      oracle-db:
+        condition: service_healthy
+    ports:
+      - "8181:8181"  # ORDS HTTP
+      - "8443:8443"  # ORDS HTTPS (if configured)
+    volumes:
+      - ./ords/ords_secrets:/opt/oracle/variables
+      - ./ords/ords_config:/opt/oracle/config
+      - ./ords/config:/etc/ords/config
+      - ./ords/log:/tmp
+    environment:
+      - CONN_STRING_FILE=/etc/ords/ords_params.properties
+      - CONN_STRING=sys/OraclePwd123@oracle-db:1521/ORCLPDB1
+    networks:
+      - apexnet
+    entrypoint: ["/bin/sh", "-c", "bash /entrypoint.sh"]
+
+  ollama:
+    image: ollama/ollama
+    container_name: ollama
+    ports:
+      - "11434:11434"  # Default Ollama API port
+    volumes:
+      - ./ollama:/root/.ollama
+    networks:
+      - apexnet
+    restart: unless-stopped
+
+  openwebui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: openwebui
+    ports:
+      - "3000:8080"  # WebUI frontend
+    volumes:
+      - ./openwebui:/app/backend/data
+    environment:
+      - OLLAMA_API_BASE_URL=http://ollama:11434
+    depends_on:
+      - ollama
+    networks:
+      - apexnet
+    restart: unless-stopped
+
+networks:
+  apexnet:
+    driver: bridge
+
